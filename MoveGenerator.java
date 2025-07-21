@@ -28,7 +28,7 @@ public class MoveGenerator {
                     if (pieceMoves.isEmpty()) {
                         String pos = board.positionToString(row, col);
                         String pieceDesc = getPieceDescription(pieceValue);
-                        System.out.println("DEBUG: " + pieceDesc + " at " + pos + " has no moves");
+                        //System.out.println("DEBUG: " + pieceDesc + " at " + pos + " has no moves");
                     }
                     
                     moves.addAll(pieceMoves);
