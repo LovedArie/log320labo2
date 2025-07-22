@@ -131,8 +131,9 @@ public class Board {
     
     // Execute a move on the board
     public boolean makeMove(Move move) {
+
         if (!isValidMove(move)) return false;
-        
+
         int piece = board[move.fromRow][move.fromCol];
         
         // Handle capture
@@ -170,7 +171,7 @@ public class Board {
                 board[pushedMove.fromRow][pushedMove.fromCol] = EMPTY;
             }
         }
-        
+
         return true;
     }
     

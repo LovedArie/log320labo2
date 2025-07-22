@@ -3,7 +3,7 @@ import java.util.List;
 import java.util.ArrayList;
 
 public class MiniMax {
-    private static final int MAX_DEPTH = 100;
+    private static final int MAX_DEPTH = 6;
     private static final long TIME_LIMIT = 4800; // 4.8 seconds
     private static final int POSITIVE_INFINITY = 1000000;
     private static final int NEGATIVE_INFINITY = -1000000;
@@ -12,6 +12,9 @@ public class MiniMax {
     private boolean timeUp;
     private Random random;
 
+
+    //There might be a problem with the makemove method or something related to it.
+    // move should be a list of all valid move, but all the move is returning false.
     /**
      * Find the best move using minimax with alpha-beta pruning and time limit
      * @param board The current board state
@@ -38,11 +41,12 @@ public class MiniMax {
         }
 
         // Order moves to prioritize better moves for alpha-beta pruning
-        //possibleMoves = orderMoves(possibleMoves, board, color); //This makes no sense.
+        possibleMoves = orderMoves(possibleMoves, board, color); //This makes no sense.
 
         // Iterative deepening - start with depth 4 for better evaluation
-        for (int depth = 0; depth <= MAX_DEPTH && !timeUp; depth++) {
-            String currentBestMove = null;            /// This might need to be outisde the for loop.
+        for (int depth = 4; depth <= MAX_DEPTH && !timeUp; depth++) {
+            System.out.println("Where are we at: " + depth);
+            String currentBestMove = null;              /// This might need to be outisde the for loop.
             int currentBestScore = NEGATIVE_INFINITY; /// This might need to be outside the for loop
 
             for (String moveStr : possibleMoves) {
@@ -125,10 +129,12 @@ public class MiniMax {
 
                 // Make a copy of the board and apply the move
                 Board tempBoard = copyBoard(board);
+                tempBoard.setRedPlayer(!tempBoard.isRedPlayer());
                 Board.Move move = tempBoard.parseMove(moveStr);
 
                 if (move != null && tempBoard.makeMove(move)) {
                     String nextColor = currentColor.equalsIgnoreCase("red") ? "black" : "red";
+                    //System.out.println("Maximazing is true: " + isMaximizing);
                     int eval = minimax(tempBoard, depth - 1, alpha, beta, false, nextColor, originalColor);
 
                     maxEval = Math.max(maxEval, eval);
@@ -140,11 +146,11 @@ public class MiniMax {
                     }
                 }
             }
-            System.out.println("This is maxEval : " + maxEval);
+            //System.out.println("This is maxEval : " + maxEval);
             return maxEval;
 
         } else {
-            System.out.println("Are we getting here: " + depth);
+            //System.out.println("Are we getting here: " + depth);
             int minEval = POSITIVE_INFINITY;
 
             for (String moveStr : possibleMoves) {
@@ -152,10 +158,12 @@ public class MiniMax {
 
                 // Make a copy of the board and apply the move
                 Board tempBoard = copyBoard(board);
+                tempBoard.setRedPlayer(!tempBoard.isRedPlayer());
                 Board.Move move = tempBoard.parseMove(moveStr);
 
                 if (move != null && tempBoard.makeMove(move)) {
                     String nextColor = currentColor.equalsIgnoreCase("red") ? "black" : "red";
+                    //System.out.println("Maximazing is false: " + isMaximizing);
                     int eval = minimax(tempBoard, depth - 1, alpha, beta, true, nextColor, originalColor);
 
                     minEval = Math.min(minEval, eval);
@@ -238,6 +246,13 @@ public class MiniMax {
         boolean isRed = color.equalsIgnoreCase("red");
 
         for (String moveStr : moves) {
+
+            // Check time limit
+            if (System.currentTimeMillis() - startTime > TIME_LIMIT) {
+                timeUp = true;
+                break;
+            }
+
             Board.Move move = board.parseMove(moveStr);
             if (move == null) continue;
 

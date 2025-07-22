@@ -23,11 +23,12 @@ public class BoardEvaluation {
     // Mobility weight
     private static final int MOBILITY_WEIGHT_DIVISOR = 4;
 
-    // Enhanced tactical safety penalties
-    private static final int UNDER_ATTACK_BASE_PENALTY = 600;
-    private static final int POOR_PROTECTION_PENALTY = 250;
-    private static final int ISOLATION_PENALTY = 350;
-    private static final int ADVANCED_EXPOSURE_MULTIPLIER = 250;
+    // Enhanced tactical safety penalties - INCREASED for danger prioritization
+    private static final int UNDER_ATTACK_BASE_PENALTY = 2000;     // Massive penalty for threatened pieces
+    private static final int POOR_PROTECTION_PENALTY = 800;        // Heavy penalty for unprotected pieces
+    private static final int ISOLATION_PENALTY = 1000;             // Severe penalty for isolated pieces
+    private static final int ADVANCED_EXPOSURE_MULTIPLIER = 500;   // Extreme penalty for losing advanced pieces
+    private static final int DANGER_NULLIFICATION_THRESHOLD = 3000; // Threshold above which positional value is nullified
 
     // Coordination bonuses
     private static final int PUSHER_SUPPORT_BONUS = 150;
@@ -43,10 +44,12 @@ public class BoardEvaluation {
     private static final int CENTRAL_CONTROL_BONUS = 80;
     private static final int OPPONENT_PRESSURE_BONUS = 100;
 
-    // NEW: Pin/blockade penalties
-    private static final int PIN_BASE_PENALTY = 800;           // Base penalty for pinned pieces
-    private static final int BLOCKADE_PENALTY = 600;          // Penalty for blocked advancement
-    private static final int TRAPPED_ADVANCED_MULTIPLIER = 3; // Extra penalty for trapped advanced pieces
+    // NEW: Tactical trap penalties
+    private static final int TACTICAL_TRAP_PENALTY = 1500;     // Heavy penalty for pieces that can be easily neutralized
+    private static final int FUTURE_PIN_PENALTY = 1000;       // Penalty for positions opponent can pin next move
+    private static final int EXPOSED_ADVANCE_MULTIPLIER = 2;   // Extra penalty for advanced trapped pieces
+    private static final int PIN_BASE_PENALTY = 2000;   // Extra penalty for advanced trapped pieces
+    private static final int BLOCKADE_PENALTY = 2500;   // Extra penalty for advanced trapped pieces
 
     // Terminal values
     private static final int WIN_VALUE = 1_000_000;
@@ -422,13 +425,17 @@ public class BoardEvaluation {
         int positionalValue = calculateEnhancedPositionalValue(row, pieceIsRed, pieceIsPusher, advancementMultiplier);
         totalValue += positionalValue;
 
-        // 2. NEW: Pin/blockade penalty - heavily reduces value of trapped pieces
+        // 2. NEW: Tactical trap penalty - detects if opponent can easily neutralize this piece
+        int tacticalTrapPenalty = calculateTacticalTrapPenalty(board, row, col, pieceIsRed, pieceIsPusher);
+        totalValue -= tacticalTrapPenalty;
+
+        // 3. Pin/blockade penalty - heavily reduces value of trapped pieces
         int pinPenalty = calculatePinPenalty(board, row, col, pieceIsRed, pieceIsPusher);
         totalValue -= pinPenalty;
 
-        // 3. Phase-adjusted safety deductions
-        int safetyDeductions = (int)(calculateSafetyDeductions(board, row, col, pieceIsRed) * safetyMultiplier);
-        totalValue -= safetyDeductions;
+        // 4. Phase-adjusted safety deductions
+        //int safetyDeductions = (int)(calculateSafetyDeductions(board, row, col, pieceIsRed) * safetyMultiplier);
+        //totalValue -= safetyDeductions;
 
         // 4. Enhanced coordination bonuses
         int coordinationBonuses = calculateEnhancedCoordinationBonuses(board, row, col, pieceIsRed, pieceIsPusher, phase);
@@ -445,8 +452,130 @@ public class BoardEvaluation {
     }
 
     /**
-     * NEW: Calculate penalty for pinned/blocked pieces
-     * Critical for detecting when advanced pieces are neutralized
+     * NEW: Calculate penalty for pieces vulnerable to tactical traps
+     * Detects positions where opponent can easily neutralize advanced pieces
+     */
+    private static int calculateTacticalTrapPenalty(int[][] board, int row, int col, boolean pieceIsRed, boolean pieceIsPusher) {
+        if (!pieceIsPusher) return 0; // Only Pushers can create meaningful threats worth trapping
+
+        int advancementLevel = pieceIsRed ? (7 - row) : row;
+        if (advancementLevel < 2) return 0; // Only penalize advanced pieces
+
+        int penalty = 0;
+        int advanceDirection = pieceIsRed ? -1 : 1;
+
+        // Check if opponent can easily block/pin this piece with simple moves
+        if (canOpponentTrapNextMove(board, row, col, pieceIsRed)) {
+            // Base tactical trap penalty
+            penalty += TACTICAL_TRAP_PENALTY;
+
+            // Extra penalty for very advanced trapped pieces (wasted tempo)
+            if (advancementLevel >= 3) {
+                penalty += advancementLevel * advancementLevel * EXPOSED_ADVANCE_MULTIPLIER;
+            }
+        }
+
+        // Check for future pin vulnerability - if we advance, can opponent pin us?
+        if (isVulnerableToFuturePin(board, row, col, pieceIsRed)) {
+            penalty += FUTURE_PIN_PENALTY;
+        }
+
+        return penalty;
+    }
+
+    /**
+     * Check if opponent can trap this piece with a simple next move
+     */
+    private static boolean canOpponentTrapNextMove(int[][] board, int row, int col, boolean pieceIsRed) {
+        int opponentAdvanceDirection = pieceIsRed ? 1 : -1;
+
+        // Look for opponent pieces that can easily block our advancement paths
+        // Check positions where opponent could move to block us
+        int[] blockingRows = {row + (pieceIsRed ? -1 : 1)}; // One square in front of us
+        int[] blockingCols = {col - 1, col, col + 1}; // All three forward positions
+
+        for (int blockRow : blockingRows) {
+            for (int blockCol : blockingCols) {
+                if (!isValidPosition(blockRow, blockCol)) continue;
+                if (board[blockRow][blockCol] != EMPTY) continue; // Already occupied
+
+                // Check if opponent has a piece that can easily reach this blocking position
+                if (opponentCanReachSquare(board, blockRow, blockCol, !pieceIsRed)) {
+                    return true; // Opponent can easily trap us
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if opponent can reach a specific square to block/pin
+     */
+    private static boolean opponentCanReachSquare(int[][] board, int targetRow, int targetCol, boolean opponentIsRed) {
+        int opponentAdvanceDirection = opponentIsRed ? -1 : 1;
+
+        // Check adjacent squares where opponent pieces could come from
+        int[] sourceRows = {targetRow - opponentAdvanceDirection, targetRow, targetRow + opponentAdvanceDirection};
+        int[] sourceCols = {targetCol - 1, targetCol, targetCol + 1};
+
+        for (int sourceRow : sourceRows) {
+            for (int sourceCol : sourceCols) {
+                if (!isValidPosition(sourceRow, sourceCol)) continue;
+                if (sourceRow == targetRow && sourceCol == targetCol) continue;
+
+                int piece = board[sourceRow][sourceCol];
+                if (piece == EMPTY) continue;
+
+                boolean pieceIsRed = (piece == RED_PUSHER || piece == RED_PUSHED);
+                if (pieceIsRed != opponentIsRed) continue; // Not opponent's piece
+
+                boolean pieceIsPusher = (piece == RED_PUSHER || piece == BLACK_PUSHER);
+
+                // Check if this piece can legally reach the target square
+                if (canPieceReachSquare(sourceRow, sourceCol, targetRow, targetCol, pieceIsPusher, opponentIsRed)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if piece can legally move from source to target
+     */
+    private static boolean canPieceReachSquare(int fromRow, int fromCol, int toRow, int toCol,
+                                               boolean isPusher, boolean isRed) {
+        if (!isPusher) return false; // Simplified - only check Pusher moves for efficiency
+
+        int advanceDirection = isRed ? -1 : 1;
+        int rowDiff = toRow - fromRow;
+        int colDiff = Math.abs(toCol - fromCol);
+
+        // Pusher can move one square forward (straight or diagonal)
+        return rowDiff == advanceDirection && colDiff <= 1;
+    }
+
+    /**
+     * Check if this piece is vulnerable to future pinning
+     */
+    private static boolean isVulnerableToFuturePin(int[][] board, int row, int col, boolean pieceIsRed) {
+        int advanceDirection = pieceIsRed ? -1 : 1;
+
+        // If we advance one square forward, check if opponent can pin us
+        int futureRow = row + advanceDirection;
+        int futureCol = col;
+
+        if (!isValidPosition(futureRow, futureCol)) return false;
+        if (board[futureRow][futureCol] != EMPTY) return false; // Can't advance
+
+        // Check if opponent can block our future paths from that advanced position
+        return canOpponentTrapNextMove(board, futureRow, futureCol, pieceIsRed);
+    }
+
+    /**
+     * Calculate penalty for pinned/blocked pieces (existing function, kept for current pins)
      */
     private static int calculatePinPenalty(int[][] board, int row, int col, boolean pieceIsRed, boolean pieceIsPusher) {
         if (!pieceIsPusher) return 0; // Only Pushers can be meaningfully pinned
@@ -470,7 +599,7 @@ public class BoardEvaluation {
 
         if (blockedPaths >= 2) {
             // Severely pinned - most/all paths blocked
-            penalty = PIN_BASE_PENALTY + (advancementLevel * advancementLevel * TRAPPED_ADVANCED_MULTIPLIER);
+            penalty = PIN_BASE_PENALTY + (advancementLevel * advancementLevel * TACTICAL_TRAP_PENALTY);
         } else if (blockedPaths == 1 && straightBlocked) {
             // Key advancement path blocked
             penalty = BLOCKADE_PENALTY + (advancementLevel * advancementLevel);
@@ -761,23 +890,44 @@ public class BoardEvaluation {
         return mobilityScore;
     }
 
-    private static int calculateSafetyDeductions(int[][] board, int row, int col, boolean pieceIsRed) {
+    /**
+     * ENHANCED safety deductions with heavy penalties for threatened pieces
+     */
+    private static int calculateEnhancedSafetyDeductions(int[][] board, int row, int col, boolean pieceIsRed) {
         int totalDeductions = 0;
         int advancementLevel = pieceIsRed ? (7 - row) : row;
 
+        // MASSIVE penalty for pieces under direct attack
         if (isUnderSimpleAttack(board, row, col, pieceIsRed)) {
-            totalDeductions += UNDER_ATTACK_BASE_PENALTY * (1 + advancementLevel);
-            totalDeductions += advancementLevel * advancementLevel * ADVANCED_EXPOSURE_MULTIPLIER;
+            // Base penalty scales dramatically with advancement
+            int attackPenalty = UNDER_ATTACK_BASE_PENALTY * (1 + advancementLevel);
+            // Exponential penalty for losing advanced pieces
+            attackPenalty += advancementLevel * advancementLevel * ADVANCED_EXPOSURE_MULTIPLIER;
+            totalDeductions += attackPenalty;
+
+            // If piece is very advanced and under attack, it's almost worthless
+            if (advancementLevel >= 4) {
+                totalDeductions += 2000; // Additional severe penalty
+            }
         }
 
+        // Heavy penalty for poorly protected pieces
         int protectionScore = analyzeLocalProtection(board, row, col, pieceIsRed);
         if (protectionScore < 2) {
-            int protectionPenalty = (2 - protectionScore) * POOR_PROTECTION_PENALTY * (1 + advancementLevel / 2);
+            // Scale protection penalty with advancement - advanced unprotected pieces are very dangerous
+            int protectionPenalty = (2 - protectionScore) * POOR_PROTECTION_PENALTY * (1 + advancementLevel);
             totalDeductions += protectionPenalty;
         }
 
+        // Severe penalty for isolated pieces (especially advanced ones)
         if (!hasDefensiveSupport(board, row, col, pieceIsRed)) {
-            totalDeductions += ISOLATION_PENALTY * (1 + advancementLevel / 2);
+            int isolationPenalty = ISOLATION_PENALTY * (1 + advancementLevel);
+            totalDeductions += isolationPenalty;
+        }
+
+        // Extra penalty for pieces in "no man's land" (advanced but unsupported)
+        if (advancementLevel >= 3 && protectionScore == 0) {
+            totalDeductions += 1500; // Severe penalty for advanced pieces with zero protection
         }
 
         return totalDeductions;
