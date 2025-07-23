@@ -3,7 +3,7 @@ import java.util.List;
 import java.util.ArrayList;
 
 public class MiniMax {
-    private static final int MAX_DEPTH = 6;
+    private static final int MAX_DEPTH = 8;
     private static final long TIME_LIMIT = 4800; // 4.8 seconds
     private static final int POSITIVE_INFINITY = 1000000;
     private static final int NEGATIVE_INFINITY = -1000000;
@@ -11,6 +11,8 @@ public class MiniMax {
     private long startTime;
     private boolean timeUp;
     private Random random;
+
+    private boolean checkTime = false;
 
 
     //There might be a problem with the makemove method or something related to it.
@@ -43,18 +45,26 @@ public class MiniMax {
         // Order moves to prioritize better moves for alpha-beta pruning
         possibleMoves = orderMoves(possibleMoves, board, color); //This makes no sense.
 
+        // Get all possible moves for the current player
+        System.out.println("=== MOVE GENERATION DEBUG ===");
+        System.out.println("Generated " + possibleMoves.length + " moves for " + (board.isRedPlayer() ? "Red" : "Black") + ":");
+        for (String move : possibleMoves) {
+            System.out.println("  " + move);
+        }
+
+        String currentBestMove = null;              /// This might need to be outisde the for loop.
+        int currentBestScore = NEGATIVE_INFINITY; /// This might need to be outside the for loop
         // Iterative deepening - start with depth 4 for better evaluation
-        for (int depth = 4; depth <= MAX_DEPTH && !timeUp; depth++) {
+        for (int depth = 6; depth <= MAX_DEPTH && !timeUp; depth++) {
             System.out.println("Where are we at: " + depth);
-            String currentBestMove = null;              /// This might need to be outisde the for loop.
-            int currentBestScore = NEGATIVE_INFINITY; /// This might need to be outside the for loop
 
             for (String moveStr : possibleMoves) {
-                if (timeUp) break;
+                if (timeUp && checkTime) break;
 
                 // Make a copy of the board and apply the move
                 Board tempBoard = copyBoard(board);
                 Board.Move move = tempBoard.parseMove(moveStr);
+
 
                 if (move != null && tempBoard.makeMove(move)) {
                     // Get the opponent's color
@@ -64,10 +74,13 @@ public class MiniMax {
                     int score = minimax(tempBoard, depth - 1, NEGATIVE_INFINITY, POSITIVE_INFINITY,
                             false, opponentColor, color);
 
+                    System.out.println("Move " + moveStr + " -> Score: " + score);
+
                     // Add small random factor to break ties and avoid repetition
                     score += random.nextInt(3) - 1; // -1, 0, or 1
 
                     if (score > currentBestScore) {
+                        System.out.println("  *** NEW BEST MOVE: " + moveStr + " (score: " + score + ")");
                         currentBestScore = score;
                         currentBestMove = moveStr;
                     }
@@ -79,6 +92,9 @@ public class MiniMax {
                 bestMove = currentBestMove;
             }
         }
+        System.out.println("=== FINAL DECISION ===");
+        System.out.println("Chosen move: " + bestMove + " with score: " + currentBestScore);
+
 
         return bestMove != null ? bestMove : possibleMoves[0];
     }
@@ -98,13 +114,13 @@ public class MiniMax {
                         String currentColor, String originalColor) {
 
         // Check time limit
-        if (System.currentTimeMillis() - startTime > TIME_LIMIT) {
+        if (System.currentTimeMillis() - startTime > TIME_LIMIT && checkTime) {
             timeUp = true;
             return 0;
         }
 
         // Base case: depth 0 or game over
-        if (depth == 0 || board.isGameOver() || timeUp) {
+        if (depth == 0 || board.isGameOver() || (timeUp && checkTime)) {
             return evaluatePosition(board, originalColor);
         }
 
@@ -120,12 +136,15 @@ public class MiniMax {
         // Order moves for better alpha-beta pruning
         possibleMoves = orderMoves(possibleMoves, board, currentColor);
 
+
+
+
         if (isMaximizing) {
 
             int maxEval = NEGATIVE_INFINITY;
 
             for (String moveStr : possibleMoves) {
-                if (timeUp) break;
+                if (timeUp && checkTime) break;
 
                 // Make a copy of the board and apply the move
                 Board tempBoard = copyBoard(board);
@@ -154,7 +173,7 @@ public class MiniMax {
             int minEval = POSITIVE_INFINITY;
 
             for (String moveStr : possibleMoves) {
-                if (timeUp) break;
+                if (timeUp && checkTime) break;
 
                 // Make a copy of the board and apply the move
                 Board tempBoard = copyBoard(board);
@@ -248,10 +267,10 @@ public class MiniMax {
         for (String moveStr : moves) {
 
             // Check time limit
-            if (System.currentTimeMillis() - startTime > TIME_LIMIT) {
+            /*if (System.currentTimeMillis() - startTime > TIME_LIMIT) {
                 timeUp = true;
                 break;
-            }
+            }*/
 
             Board.Move move = board.parseMove(moveStr);
             if (move == null) continue;

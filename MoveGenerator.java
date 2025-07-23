@@ -63,6 +63,13 @@ public class MoveGenerator {
                 }
             }
         }
+
+        // In MoveGenerator.move(), add debugging for the specific case:
+        /*System.out.println("=== MOVE GENERATOR DEBUG ===");
+        System.out.println("Looking for moves for color: " + color);
+        System.out.println("Board state at G1: " + board.getPiece(0, 6)); // Should be Red pusher
+        System.out.println("Board state at H2: " + board.getPiece(1, 7)); // Should be Black pusher
+        System.out.println("Is G1H2 valid? " + board.isValidMove(board.parseMove("G1H2")));*/
         
         return moves.toArray(new String[0]);
     }

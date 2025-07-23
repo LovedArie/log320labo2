@@ -12,8 +12,19 @@ public class Board {
     public static final int RED_PUSHER = 4;
     
     public Board() {
-        board = new int[8][8];
-        initializeBoard();
+        //board = new int[8][8];
+        board = new int[][]{
+                {2, 2, 0, 2, 0, 0, 2, 0},  // Row 0
+                {1, 1, 0, 0, 1, 0, 2, 1},  // Row 1
+                {0, 2, 1, 0, 1, 0, 0, 0},  // Row 2 - changed last element from 2 to 0
+                {0, 4, 0, 4, 0, 0, 0, 0},  // Row 3 - changed index 3 from 0 to 4, index 6 from 1 to 0
+                {3, 4, 0, 1, 0, 0, 0, 0},  // Row 4 - changed index 5 from 3 to 0
+                {0, 0, 0, 3, 1, 0, 2, 0},  // Row 5 - changed index 4 from 0 to 1, index 6 from 0 to 2
+                {0, 0, 0, 4, 0, 0, 4, 3},  // Row 6 - changed index 1 from 4 to 0, index 5 from 3 to 0, index 6 from 2 to 4
+                {0, 0, 0, 0, 4, 0, 4, 4}   // Row 7 - changed index 5 from 4 to 0
+        };
+        setRedPlayer(true);
+        //initializeBoard();
     }
     
     // Initialize the board with starting configuration

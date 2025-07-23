@@ -21,6 +21,9 @@ public class BoardEvaluation {
     private static final int WIN_VALUE = 1_000_000;
     private static final int LOSS_VALUE = -1_000_000;
 
+    // NEW: Forced win detection
+    private static final int FORCED_WIN_BONUS = 900_000;  // Huge bonus for forced wins
+
     // Board constants
     private static final int EMPTY = 0;
     private static final int BLACK_PUSHED = 1;
@@ -48,6 +51,12 @@ public class BoardEvaluation {
         int terminalValue = checkTerminalPositions(internalBoard, evaluatingForRed);
         if (terminalValue != 0) {
             return terminalValue;
+        }
+
+        // NEW: Check for forced wins
+        int forcedWinValue = checkForcedWin(internalBoard, evaluatingForRed);
+        if (forcedWinValue != 0) {
+            return forcedWinValue;
         }
 
         // Perform basic evaluation
@@ -165,7 +174,7 @@ public class BoardEvaluation {
      */
     private static int calculatePositionalValue(int row, boolean pieceIsRed, boolean pieceIsPusher) {
         // Calculate how many squares advanced toward opponent's goal
-        int advancement = pieceIsRed ? row : (7 - row);
+        int advancement = pieceIsRed ? (7 - row) : row;
 
         // Base advancement bonus
         int value = advancement * ADVANCEMENT_BONUS;
@@ -179,8 +188,153 @@ public class BoardEvaluation {
     }
 
     /**
+     * Check for forced wins (unstoppable breakthrough paths)
+     */
+    private static int checkForcedWin(int[][] board, boolean evaluatingForRed) {
+        int goalRow = evaluatingForRed ? 7 : 0;  // Opponent's goal row
+
+        // Check each of our pushers for forced win paths
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                int piece = board[row][col];
+                if (piece == EMPTY) continue;
+
+                boolean pieceIsRed = (piece == RED_PUSHER || piece == RED_PUSHED);
+                boolean pieceIsPusher = (piece == RED_PUSHER || piece == BLACK_PUSHER);
+                boolean pieceIsOurs = (pieceIsRed == evaluatingForRed);
+
+                if (pieceIsOurs && pieceIsPusher) {
+                    int movesToWin = findForcedWinPath(board, row, col, evaluatingForRed);
+                    if (movesToWin > 0) {
+                        return FORCED_WIN_BONUS - (movesToWin * 1000); // Prefer shorter wins
+                    }
+                }
+            }
+        }
+
+        return 0; // No forced win found
+    }
+
+    /**
+     * Find if this pusher has an unstoppable path to victory
+     */
+    private static int findForcedWinPath(int[][] board, int startRow, int startCol, boolean isRed) {
+        int goalRow = isRed ? 7 : 0;
+        int advanceDirection = isRed ? 1 : -1;
+
+        // Try straight path first (most common forced win scenario)
+        int movesToWin = checkStraightPath(board, startRow, startCol, goalRow, advanceDirection, isRed);
+        if (movesToWin > 0) return movesToWin;
+
+        // Could also try diagonal paths, but straight is most likely for forced wins
+        return 0;
+    }
+
+    /**
+     * Check if pusher can advance straight to goal without being stopped
+     */
+    private static int checkStraightPath(int[][] board, int startRow, int startCol, int goalRow, int advanceDirection, boolean isRed) {
+        int currentRow = startRow;
+        int moves = 0;
+
+        while (currentRow != goalRow) {
+            int nextRow = currentRow + advanceDirection;
+            int nextCol = startCol; // Straight path
+
+            if (!isValidPosition(nextRow, nextCol)) return 0;
+
+            moves++;
+            int targetSquare = board[nextRow][nextCol];
+
+            // Check if we can move to this square
+            if (targetSquare != EMPTY) {
+                // Path is blocked by a piece
+                return 0;
+            }
+
+            // Check if opponent can capture us on this square
+            if (canOpponentCapture(board, nextRow, nextCol, isRed)) {
+                return 0; // Opponent can capture us
+            }
+
+            // Check if opponent can block our next move (if not at goal yet)
+            if (nextRow != goalRow && canOpponentBlock(board, nextRow, nextCol, advanceDirection, isRed)) {
+                return 0; // Opponent can block
+            }
+
+            currentRow = nextRow;
+        }
+
+        return moves; // Found unstoppable path!
+    }
+
+    /**
+     * Check if opponent can capture piece on given square
+     */
+    private static boolean canOpponentCapture(int[][] board, int row, int col, boolean ourColorIsRed) {
+        int opponentAdvanceDirection = ourColorIsRed ? -1 : 1;
+
+        // Check diagonal attack positions
+        for (int deltaCol = -1; deltaCol <= 1; deltaCol += 2) { // Only diagonals
+            int attackerRow = row - opponentAdvanceDirection;
+            int attackerCol = col + deltaCol;
+
+            if (!isValidPosition(attackerRow, attackerCol)) continue;
+
+            int attacker = board[attackerRow][attackerCol];
+            if (attacker == EMPTY) continue;
+
+            boolean attackerIsRed = (attacker == RED_PUSHER || attacker == RED_PUSHED);
+            boolean attackerIsPusher = (attacker == RED_PUSHER || attacker == BLACK_PUSHER);
+
+            if (attackerIsRed != ourColorIsRed && attackerIsPusher) {
+                return true; // Opponent pusher can capture
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Utility methods
      */
+
+    /**
+     * Check if opponent can block our next advance
+     */
+    private static boolean canOpponentBlock(int[][] board, int ourRow, int ourCol, int advanceDirection, boolean ourColorIsRed) {
+        int nextRow = ourRow + advanceDirection;
+        int nextCol = ourCol;
+
+        if (!isValidPosition(nextRow, nextCol)) return false;
+        if (board[nextRow][nextCol] != EMPTY) return true; // Already blocked
+
+        // Check if opponent has a piece that can reach the blocking square
+        int opponentAdvanceDirection = ourColorIsRed ? -1 : 1;
+
+        // Check squares opponent could advance from
+        for (int deltaCol = -1; deltaCol <= 1; deltaCol++) {
+            int sourceRow = nextRow - opponentAdvanceDirection;
+            int sourceCol = nextCol + deltaCol;
+
+            if (!isValidPosition(sourceRow, sourceCol)) continue;
+
+            int piece = board[sourceRow][sourceCol];
+            if (piece == EMPTY) continue;
+
+            boolean pieceIsRed = (piece == RED_PUSHER || piece == RED_PUSHED);
+            boolean pieceIsPusher = (piece == RED_PUSHER || piece == BLACK_PUSHER);
+
+            if (pieceIsRed != ourColorIsRed && pieceIsPusher) {
+                // Check if this opponent pusher can legally move to blocking position
+                if (Math.abs(deltaCol) <= 1) { // Can move straight or diagonally
+                    return true; // Opponent can block
+                }
+            }
+        }
+
+        return false;
+    }
     private static boolean isValidPosition(int row, int col) {
         return row >= 0 && row < 8 && col >= 0 && col < 8;
     }

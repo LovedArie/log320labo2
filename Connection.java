@@ -9,8 +9,9 @@ class Client {
     BufferedOutputStream output;
     Board board = new Board();
     MiniMax miniMax = new MiniMax();
-    String myColor = null; // Track which color this AI is playing
-    
+    //String myColor = null; // Track which color this AI is playing
+    String myColor = "red"; // Track which color this AI is playing
+
     try {
         MyClient = new Socket("localhost", 8888);
 
