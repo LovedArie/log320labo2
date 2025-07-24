@@ -1,28 +1,26 @@
 /**
- * Simple Board Evaluation for Pushers Game
+ * Board Evaluation for Pushers Game with Piece Mobility
  *
- * Clean, minimal evaluation focusing on:
+ * Enhanced evaluation focusing on:
  * - Terminal positions (win/loss detection)
- * - Material balance
+ * - Material balance (only mobile pushed pieces count)
  * - Basic positional advancement
- * - Simple safety considerations
+ * - Piece mobility for pushed pieces
  */
 public class BoardEvaluation {
 
     // Material values
-    private static final int PUSHER_MATERIAL_VALUE = 100;
-    private static final int PUSHED_MATERIAL_VALUE = 50;
+    private static final int PUSHER_MATERIAL_VALUE = 200;
+    private static final int PUSHED_MATERIAL_VALUE = 100;
 
     // Positional scoring
     private static final int ADVANCEMENT_BONUS = 10;  // Points per square advanced
     private static final int PUSHER_BONUS_MULTIPLIER = 2;  // Pushers get double advancement bonus
+    private static final int HALF_BOARD_MULTIPLIER = 2;  // Extra multiplier for pushers past halfway
 
     // Terminal values
     private static final int WIN_VALUE = 1_000_000;
     private static final int LOSS_VALUE = -1_000_000;
-
-    // NEW: Forced win detection
-    private static final int FORCED_WIN_BONUS = 900_000;  // Huge bonus for forced wins
 
     // Board constants
     private static final int EMPTY = 0;
@@ -53,14 +51,8 @@ public class BoardEvaluation {
             return terminalValue;
         }
 
-        // NEW: Check for forced wins
-        int forcedWinValue = checkForcedWin(internalBoard, evaluatingForRed);
-        if (forcedWinValue != 0) {
-            return forcedWinValue;
-        }
-
-        // Perform basic evaluation
-        return performBasicEvaluation(internalBoard, evaluatingForRed);
+        // Perform enhanced evaluation with mobility
+        return performEnhancedEvaluation(internalBoard, evaluatingForRed);
     }
 
     /**
@@ -122,13 +114,13 @@ public class BoardEvaluation {
     }
 
     /**
-     * Basic evaluation combining material and positional factors
+     * Enhanced evaluation combining material and positional factors with mobility
      */
-    private static int performBasicEvaluation(int[][] board, boolean evaluatingForRed) {
+    private static int performEnhancedEvaluation(int[][] board, boolean evaluatingForRed) {
         int ourScore = 0;
         int opponentScore = 0;
-        int ourPushers = 0, ourPushed = 0;
-        int opponentPushers = 0, opponentPushed = 0;
+        int ourPushers = 0, ourMobilePushed = 0;
+        int opponentPushers = 0, opponentMobilePushed = 0;
 
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
@@ -138,30 +130,45 @@ public class BoardEvaluation {
                 boolean pieceIsRed = (piece == RED_PUSHER || piece == RED_PUSHED);
                 boolean pieceIsOurs = (pieceIsRed == evaluatingForRed);
                 boolean pieceIsPusher = (piece == RED_PUSHER || piece == BLACK_PUSHER);
+                boolean pieceIsPushed = (piece == RED_PUSHED || piece == BLACK_PUSHED);
 
-                // Count material
-                if (pieceIsOurs) {
-                    if (pieceIsPusher) ourPushers++;
-                    else ourPushed++;
-                } else {
-                    if (pieceIsPusher) opponentPushers++;
-                    else opponentPushed++;
+
+                // Skip pieces that haven't moved from their starting positions
+                if(isInStartingPosition(row, col, piece)){
+                    continue;
                 }
 
-                // Calculate positional value
-                int positionalValue = calculatePositionalValue(row, pieceIsRed, pieceIsPusher);
-
+                // Count material - only mobile pushed pieces count (and only if they've moved
                 if (pieceIsOurs) {
-                    ourScore += positionalValue;
+                    if (pieceIsPusher) {
+                        ourPushers++;
+                    } else if (pieceIsPushed && isPushedPieceMobile(board, row, col, piece)) {
+                        ourMobilePushed++;
+                    }
                 } else {
-                    opponentScore += positionalValue;
+                    if (pieceIsPusher) {
+                        opponentPushers++;
+                    } else if (pieceIsPushed && isPushedPieceMobile(board, row, col, piece)) {
+                        opponentMobilePushed++;
+                    }
+                }
+
+                // Calculate positional value - only for mobile pieces that have moved
+                if (pieceIsPusher || (pieceIsPushed && isPushedPieceMobile(board, row, col, piece))) {
+                    int positionalValue = calculatePositionalValue(row, pieceIsRed, pieceIsPusher);
+
+                    if (pieceIsOurs) {
+                        ourScore += positionalValue;
+                    } else {
+                        opponentScore += positionalValue;
+                    }
                 }
             }
         }
 
-        // Material balance
+        // Material balance - only count mobile pieces that have moved
         int materialBalance = PUSHER_MATERIAL_VALUE * (ourPushers - opponentPushers) +
-                PUSHED_MATERIAL_VALUE * (ourPushed - opponentPushed);
+                PUSHED_MATERIAL_VALUE * (ourMobilePushed - opponentMobilePushed);
 
         // Positional balance
         int positionalBalance = ourScore - opponentScore;
@@ -170,11 +177,106 @@ public class BoardEvaluation {
     }
 
     /**
+
+     * Check if a piece is still in its starting position
+
+     */
+
+    private static boolean isInStartingPosition(int row, int col, int piece) {
+
+        switch (piece) {
+
+            case RED_PUSHER:
+
+                // Red pushers start on row 7 (rank 1)
+
+                return row == 7;
+
+
+
+            case RED_PUSHED:
+
+                // Red pushed pieces start on row 6 (rank 2)
+
+                return row == 6;
+
+
+
+            case BLACK_PUSHER:
+
+                // Black pushers start on row 0 (rank 8)
+
+                return row == 0;
+
+
+
+            case BLACK_PUSHED:
+
+                // Black pushed pieces start on row 1 (rank 7)
+
+                return row == 1;
+
+
+
+            default:
+
+                return false;
+
+        }
+
+    }
+
+    /**
+     * Check if a pushed piece is mobile (has legal moves)
+     */
+    private static boolean isPushedPieceMobile(int[][] board, int row, int col, int pushedPiece) {
+        boolean pieceIsRed = (pushedPiece == RED_PUSHED);
+        int requiredPusher = pieceIsRed ? RED_PUSHER : BLACK_PUSHER;
+        int direction = pieceIsRed ? 1 : -1; // Red pushed pieces need pusher behind them (higher row), Black vice versa
+
+        // Check the three possible pusher positions that could move this pushed piece
+        int[] pusherRows = {row + direction, row + direction, row + direction};
+        int[] pusherCols = {col - 1, col, col + 1}; // Left diagonal, straight behind, right diagonal
+
+        for (int i = 0; i < 3; i++) {
+            int pusherRow = pusherRows[i];
+            int pusherCol = pusherCols[i];
+
+            // Check if pusher position is valid and contains the right pusher
+            if (isValidPosition(pusherRow, pusherCol) && board[pusherRow][pusherCol] == requiredPusher) {
+                // Check if the pushed piece can move in the direction the pusher would push it
+                int moveDirection = pieceIsRed ? -1 : 1; // Red moves up (decreasing row), Black moves down
+                int newRow = row + moveDirection;
+                int newCol = col + (pusherCol - col); // Same direction as pusher relationship
+
+                if (isValidPosition(newRow, newCol)) {
+                    int targetPiece = board[newRow][newCol];
+
+                    // Can move to empty square
+                    if (targetPiece == EMPTY) {
+                        return true;
+                    }
+
+                    // Can capture opponent piece on diagonal moves
+                    if (pusherCol != col) { // Diagonal move
+                        boolean targetIsRed = (targetPiece == RED_PUSHER || targetPiece == RED_PUSHED);
+                        if (pieceIsRed != targetIsRed) { // Different colors
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Simple positional value based on advancement toward goal
      */
     private static int calculatePositionalValue(int row, boolean pieceIsRed, boolean pieceIsPusher) {
         // Calculate how many squares advanced toward opponent's goal
-        int advancement = pieceIsRed ? (7 - row) : row;
+        int advancement = pieceIsRed ? (8 - row) : row;
 
         // Base advancement bonus
         int value = advancement * ADVANCEMENT_BONUS;
@@ -182,159 +284,20 @@ public class BoardEvaluation {
         // Pushers get bonus for advancement
         if (pieceIsPusher) {
             value *= PUSHER_BONUS_MULTIPLIER;
+
+            // Additional bonus for pushers that corss the halfway line
+            boolean crossedHalfway = pieceIsRed ? (row <=3) : (row >=4);
+            if(crossedHalfway){
+                value *= HALF_BOARD_MULTIPLIER;
+            }
         }
 
         return value;
     }
 
     /**
-     * Check for forced wins (unstoppable breakthrough paths)
-     */
-    private static int checkForcedWin(int[][] board, boolean evaluatingForRed) {
-        int goalRow = evaluatingForRed ? 7 : 0;  // Opponent's goal row
-
-        // Check each of our pushers for forced win paths
-        for (int row = 0; row < 8; row++) {
-            for (int col = 0; col < 8; col++) {
-                int piece = board[row][col];
-                if (piece == EMPTY) continue;
-
-                boolean pieceIsRed = (piece == RED_PUSHER || piece == RED_PUSHED);
-                boolean pieceIsPusher = (piece == RED_PUSHER || piece == BLACK_PUSHER);
-                boolean pieceIsOurs = (pieceIsRed == evaluatingForRed);
-
-                if (pieceIsOurs && pieceIsPusher) {
-                    int movesToWin = findForcedWinPath(board, row, col, evaluatingForRed);
-                    if (movesToWin > 0) {
-                        return FORCED_WIN_BONUS - (movesToWin * 1000); // Prefer shorter wins
-                    }
-                }
-            }
-        }
-
-        return 0; // No forced win found
-    }
-
-    /**
-     * Find if this pusher has an unstoppable path to victory
-     */
-    private static int findForcedWinPath(int[][] board, int startRow, int startCol, boolean isRed) {
-        int goalRow = isRed ? 7 : 0;
-        int advanceDirection = isRed ? 1 : -1;
-
-        // Try straight path first (most common forced win scenario)
-        int movesToWin = checkStraightPath(board, startRow, startCol, goalRow, advanceDirection, isRed);
-        if (movesToWin > 0) return movesToWin;
-
-        // Could also try diagonal paths, but straight is most likely for forced wins
-        return 0;
-    }
-
-    /**
-     * Check if pusher can advance straight to goal without being stopped
-     */
-    private static int checkStraightPath(int[][] board, int startRow, int startCol, int goalRow, int advanceDirection, boolean isRed) {
-        int currentRow = startRow;
-        int moves = 0;
-
-        while (currentRow != goalRow) {
-            int nextRow = currentRow + advanceDirection;
-            int nextCol = startCol; // Straight path
-
-            if (!isValidPosition(nextRow, nextCol)) return 0;
-
-            moves++;
-            int targetSquare = board[nextRow][nextCol];
-
-            // Check if we can move to this square
-            if (targetSquare != EMPTY) {
-                // Path is blocked by a piece
-                return 0;
-            }
-
-            // Check if opponent can capture us on this square
-            if (canOpponentCapture(board, nextRow, nextCol, isRed)) {
-                return 0; // Opponent can capture us
-            }
-
-            // Check if opponent can block our next move (if not at goal yet)
-            if (nextRow != goalRow && canOpponentBlock(board, nextRow, nextCol, advanceDirection, isRed)) {
-                return 0; // Opponent can block
-            }
-
-            currentRow = nextRow;
-        }
-
-        return moves; // Found unstoppable path!
-    }
-
-    /**
-     * Check if opponent can capture piece on given square
-     */
-    private static boolean canOpponentCapture(int[][] board, int row, int col, boolean ourColorIsRed) {
-        int opponentAdvanceDirection = ourColorIsRed ? -1 : 1;
-
-        // Check diagonal attack positions
-        for (int deltaCol = -1; deltaCol <= 1; deltaCol += 2) { // Only diagonals
-            int attackerRow = row - opponentAdvanceDirection;
-            int attackerCol = col + deltaCol;
-
-            if (!isValidPosition(attackerRow, attackerCol)) continue;
-
-            int attacker = board[attackerRow][attackerCol];
-            if (attacker == EMPTY) continue;
-
-            boolean attackerIsRed = (attacker == RED_PUSHER || attacker == RED_PUSHED);
-            boolean attackerIsPusher = (attacker == RED_PUSHER || attacker == BLACK_PUSHER);
-
-            if (attackerIsRed != ourColorIsRed && attackerIsPusher) {
-                return true; // Opponent pusher can capture
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * Utility methods
      */
-
-    /**
-     * Check if opponent can block our next advance
-     */
-    private static boolean canOpponentBlock(int[][] board, int ourRow, int ourCol, int advanceDirection, boolean ourColorIsRed) {
-        int nextRow = ourRow + advanceDirection;
-        int nextCol = ourCol;
-
-        if (!isValidPosition(nextRow, nextCol)) return false;
-        if (board[nextRow][nextCol] != EMPTY) return true; // Already blocked
-
-        // Check if opponent has a piece that can reach the blocking square
-        int opponentAdvanceDirection = ourColorIsRed ? -1 : 1;
-
-        // Check squares opponent could advance from
-        for (int deltaCol = -1; deltaCol <= 1; deltaCol++) {
-            int sourceRow = nextRow - opponentAdvanceDirection;
-            int sourceCol = nextCol + deltaCol;
-
-            if (!isValidPosition(sourceRow, sourceCol)) continue;
-
-            int piece = board[sourceRow][sourceCol];
-            if (piece == EMPTY) continue;
-
-            boolean pieceIsRed = (piece == RED_PUSHER || piece == RED_PUSHED);
-            boolean pieceIsPusher = (piece == RED_PUSHER || piece == BLACK_PUSHER);
-
-            if (pieceIsRed != ourColorIsRed && pieceIsPusher) {
-                // Check if this opponent pusher can legally move to blocking position
-                if (Math.abs(deltaCol) <= 1) { // Can move straight or diagonally
-                    return true; // Opponent can block
-                }
-            }
-        }
-
-        return false;
-    }
     private static boolean isValidPosition(int row, int col) {
         return row >= 0 && row < 8 && col >= 0 && col < 8;
     }
@@ -343,5 +306,42 @@ public class BoardEvaluation {
         if (piece == EMPTY) return false;
         boolean pieceIsRed = (piece == RED_PUSHER || piece == RED_PUSHED);
         return pieceIsRed == ourColorIsRed;
+    }
+
+    /**
+     * Debug method to print mobility analysis
+     */
+    public static void printMobilityAnalysis(char[][] board) {
+        int[][] internalBoard = convertToInternalFormat(board);
+
+        System.out.println("=== MOBILITY ANALYSIS ===");
+
+        // Analyze Red pushed pieces
+        System.out.println("Red pushed pieces:");
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                if (internalBoard[row][col] == RED_PUSHED) {
+                    boolean mobile = isPushedPieceMobile(internalBoard, row, col, RED_PUSHED);
+                    char file = (char)('A' + col);
+                    char rank = (char)('8' - row);
+                    System.out.println("  " + file + rank + ": " + (mobile ? "MOBILE" : "IMMOBILE"));
+                }
+            }
+        }
+
+        // Analyze Black pushed pieces
+        System.out.println("Black pushed pieces:");
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                if (internalBoard[row][col] == BLACK_PUSHED) {
+                    boolean mobile = isPushedPieceMobile(internalBoard, row, col, BLACK_PUSHED);
+                    char file = (char)('A' + col);
+                    char rank = (char)('8' - row);
+                    System.out.println("  " + file + rank + ": " + (mobile ? "MOBILE" : "IMMOBILE"));
+                }
+            }
+        }
+
+        System.out.println("========================");
     }
 }

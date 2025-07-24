@@ -9,8 +9,7 @@ class Client {
     BufferedOutputStream output;
     Board board = new Board();
     MiniMax miniMax = new MiniMax();
-    //String myColor = null; // Track which color this AI is playing
-    String myColor = "red"; // Track which color this AI is playing
+    String myColor = null; // Track which color this AI is playing
 
     try {
         MyClient = new Socket("localhost", 8888);
@@ -19,22 +18,22 @@ class Client {
         output   = new BufferedOutputStream(MyClient.getOutputStream());
 
         BufferedReader console = new BufferedReader(new InputStreamReader(System.in));
-        
+
         System.out.println("Connected to server. Waiting for commands...");
-        
+
         while(true){
             char cmd = 0;
-               
+
             cmd = (char)input.read();
             System.out.println("Received command: " + cmd);
-            
+
             // Small delay to ensure all data is available
             try {
                 Thread.sleep(50);
             } catch (InterruptedException e) {
                 // Ignore
             }
-            
+
             // cmd == '1': Start new game as RED player
             // Receives initial board state and finds best move using AI
             if(cmd == '1'){
@@ -53,11 +52,11 @@ class Client {
     System.out.println("Finding best move for RED...");
     String move = miniMax.findBestMove(board, "red");
     System.out.println("Best move found: " + move);
-    
+
     // NEW: Fallback to random move if no best move found
     if (move == null) {
         System.out.println("No best move found, selecting random legal move...");
-        
+
         String[] possibleMoves = MoveGenerator.move("red", board);
         if (possibleMoves != null && possibleMoves.length > 0) {
             java.util.Random random = new java.util.Random();
@@ -67,7 +66,7 @@ class Client {
             System.err.println("ERROR: No moves available at all!");
         }
     }
-    
+
     if (move != null) {
         board.makeMoveFromServer(move);
         output.write(move.getBytes(), 0, move.length());
@@ -99,13 +98,13 @@ if(cmd == '2'){
         // Receives opponent's last move and responds with AI move
         if(cmd == '3'){
         byte[] aBuffer = new byte[64]; // Increased buffer size
-                
+
         int size = input.available();
         if (size > 0) {
             input.read(aBuffer, 0, Math.min(size, aBuffer.length));
             String opponentMove = new String(aBuffer, 0, size).trim();
             System.out.println("Opponent's move received: '" + opponentMove + "' (length=" + opponentMove.length() + ")");
-            
+
             // Apply opponent's move to our board
             if (!opponentMove.isEmpty()) {
                 boolean moveSuccess = board.makeMoveFromServer(opponentMove);
@@ -116,21 +115,21 @@ if(cmd == '2'){
                 System.out.println("WARNING: Received empty opponent move!");
             }
         }
-        
+
         // Find our best move using our tracked color
         if (myColor == null) {
             System.err.println("ERROR: myColor is null! This shouldn't happen.");
             continue; // Skip this command and wait for proper initialization
         }
         System.out.println("Finding best move for " + myColor.toUpperCase() + "...");
-        
+
         String move = miniMax.findBestMove(board, myColor);
         System.out.println("Best move found: " + move);
-        
+
         // NEW: Fallback to random move if no best move found
         if (move == null) {
             System.out.println("No best move found, selecting random legal move...");
-            
+
             String[] possibleMoves = MoveGenerator.move(myColor, board);
             if (possibleMoves != null && possibleMoves.length > 0) {
                 java.util.Random random = new java.util.Random();
@@ -141,16 +140,16 @@ if(cmd == '2'){
                 continue; // Skip this turn
             }
         }
-        
+
         if (move != null) {
             board.makeMoveFromServer(move);
             output.write(move.getBytes(), 0, move.length());
             output.flush();
             System.out.println("Move sent: " + move);
         }
-                
+
          }
-         
+
             // cmd == '4': Server requests next move (ongoing game)
             // Receives opponent's move and responds with AI move
             if(cmd == '4'){
@@ -170,21 +169,21 @@ if(cmd == '2'){
                     System.out.println("WARNING: Received empty opponent move!");
                 }
                 }
-                
+
                 // Find our best move using our tracked color
                 if (myColor == null) {
                     System.err.println("ERROR: myColor is null! This shouldn't happen.");
                     continue; // Skip this command and wait for proper initialization
                 }
                 System.out.println("Finding best move for " + myColor.toUpperCase() + "...");
-                
+
                 String move = miniMax.findBestMove(board, myColor);
                 System.out.println("Best move found: " + move);
-                
+
                 // NEW: Fallback to random move if no best move found
                 if (move == null) {
                     System.out.println("No best move found, selecting random legal move...");
-                    
+
                     String[] possibleMoves = MoveGenerator.move(myColor, board);
                     if (possibleMoves != null && possibleMoves.length > 0) {
                         java.util.Random random = new java.util.Random();
@@ -195,16 +194,16 @@ if(cmd == '2'){
                         continue; // Skip this turn
                     }
                 }
-                
+
                 if (move != null) {
                     board.makeMoveFromServer(move);
                     output.write(move.getBytes(), 0, move.length());
                     output.flush();
                     System.out.println("Move sent: " + move);
                 }
-                
+
             }
-            
+
         // cmd == '5': Server requests next move with opponent's last move info
         // Receives opponent's move data and waits for user input
         if(cmd == '5'){
@@ -214,7 +213,7 @@ if(cmd == '2'){
         String move = console.readLine();
         output.write(move.getBytes(),0,move.length());
         output.flush();
-                
+
         }
         }
     }
@@ -226,6 +225,6 @@ if(cmd == '2'){
         System.err.println("Unexpected error: " + e.getMessage());
         e.printStackTrace();
     }
-    
+
     }
 }

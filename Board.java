@@ -12,19 +12,18 @@ public class Board {
     public static final int RED_PUSHER = 4;
     
     public Board() {
-        //board = new int[8][8];
-        board = new int[][]{
-                {2, 2, 0, 2, 0, 0, 2, 0},  // Row 0
-                {1, 1, 0, 0, 1, 0, 2, 1},  // Row 1
-                {0, 2, 1, 0, 1, 0, 0, 0},  // Row 2 - changed last element from 2 to 0
-                {0, 4, 0, 4, 0, 0, 0, 0},  // Row 3 - changed index 3 from 0 to 4, index 6 from 1 to 0
-                {3, 4, 0, 1, 0, 0, 0, 0},  // Row 4 - changed index 5 from 3 to 0
-                {0, 0, 0, 3, 1, 0, 2, 0},  // Row 5 - changed index 4 from 0 to 1, index 6 from 0 to 2
-                {0, 0, 0, 4, 0, 0, 4, 3},  // Row 6 - changed index 1 from 4 to 0, index 5 from 3 to 0, index 6 from 2 to 4
-                {0, 0, 0, 0, 4, 0, 4, 4}   // Row 7 - changed index 5 from 4 to 0
-        };
-        setRedPlayer(true);
-        //initializeBoard();
+        board = new int[8][8];
+//        board = new int[][]{
+//                {0, 2, 0, 0, 2, 0, 0, 0},  // Row 0
+//                {2, 1, 1, 2, 0, 0, 2, 2},  // Row 1
+//                {1, 0, 1, 1, 0, 1, 2, 1},  // Row 2 - changed last element from 2 to 0
+//                {0, 0, 0, 0, 0, 1, 0, 0},  // Row 3 - changed index 3 from 0 to 4, index 6 from 1 to 0
+//                {0, 0, 0, 0, 0, 0, 4, 0},  // Row 4 - changed index 5 from 3 to 0
+//                {3, 3, 3, 3, 3, 3, 0, 3},  // Row 5 - changed index 4 from 0 to 1, index 6 from 0 to 2
+//                {4, 4, 4, 4, 4, 0, 4, 0},  // Row 6 - changed index 1 from 4 to 0, index 5 from 3 to 0, index 6 from 2 to 4
+//                {0, 0, 0, 0, 0, 0, 0, 4}   // Row 7 - changed index 5 from 4 to 0
+//        };
+        initializeBoard();
     }
     
     // Initialize the board with starting configuration
@@ -143,7 +142,11 @@ public class Board {
     // Execute a move on the board
     public boolean makeMove(Move move) {
 
-        if (!isValidMove(move)) return false;
+        if (!isValidMove(move)){
+            System.out.println("I will return false");
+            return false;
+        }
+        System.out.println("The move from the server from makeMove is: " + move);
 
         int piece = board[move.fromRow][move.fromCol];
         
@@ -182,6 +185,7 @@ public class Board {
                 board[pushedMove.fromRow][pushedMove.fromCol] = EMPTY;
             }
         }
+        this.setRedPlayer(!this.isRedPlayer());
 
         return true;
     }
@@ -190,6 +194,7 @@ public class Board {
     public boolean isValidMove(Move move) {
         if (!isValidPosition(move.fromRow, move.fromCol) || 
             !isValidPosition(move.toRow, move.toCol)) {
+            System.out.println("This is the invalid value of move: " + move);
             return false;
         }
         
@@ -271,6 +276,7 @@ public class Board {
     // Convenience function to make a move using server notation (e.g., "D6-D5" or "D6D5")
     public boolean makeMoveFromServer(String moveStr) {
         Move move = parseMove(moveStr);
+        System.out.println("The move from the server from makemovefromserver: " + move);
         if (move == null) {
             return false;
         }
@@ -295,6 +301,13 @@ public class Board {
 
     // Helper methods
     private boolean isValidPosition(int row, int col) {
+        if(!(row >= 0 && row < 8 && col >= 0 && col < 8)){
+            System.out.println("row >= 0: " + (row >= 0) + " Value of row: " + row);
+            System.out.println("row < 8: " + (row < 8) + " Value of row: " + row);
+            System.out.println("col >= 0: " + (col >= 0) + " Value of column: " + col);
+            System.out.println("col < 8: " + (col < 8) + " Value of column: " + col);
+            System.out.println("isValidPosition has failed");
+        }
         return row >= 0 && row < 8 && col >= 0 && col < 8;
     }
     
@@ -437,6 +450,29 @@ public class Board {
             char toFile = (char)('A' + toCol);
             char toRank = (char)('8' - toRow);
             return "" + fromFile + fromRank + "-" + toFile + toRank;
+        }
+
+        public static void printBoard(int[][] board) {
+            int rows = board.length;
+            int cols = board[0].length;
+
+            // Build a horizontal separator like "+---+---+---+...+"
+            String separator = "+" + "---+".repeat(cols);
+
+            for (int r = 0; r < rows; r++) {
+                // 1) Print the top border of this row
+                System.out.println(separator);
+
+                // 2) Print the row’s cells
+                System.out.print("|");
+                for (int c = 0; c < cols; c++) {
+                    // pad single-digit numbers to width 1; adjust if you have multi‐digit
+                    System.out.printf(" %d |", board[r][c]);
+                }
+                System.out.println();
+            }
+            // 3) Print the bottom border after the last row
+            System.out.println(separator);
         }
         
         public String toServerFormat() {

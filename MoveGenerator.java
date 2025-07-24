@@ -10,7 +10,10 @@ public class MoveGenerator {
         int totalPieces = 0;
         
         // Check every tile in the board (8x8)
-        for (int row = 0; row < 8; row++) {
+        for (int i = 0; i < 8; i++) {
+
+            int row = board.isRedPlayer() ? i : (7 - i); // Red: 0,1,2...7, Black: 7,6,5...0
+
             for (int col = 0; col < 8; col++) {
                 int pieceValue = board.getPiece(row, col);
                 
